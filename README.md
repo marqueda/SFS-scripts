@@ -14,3 +14,7 @@ This script can:
 - visualize 2D-SFSs and compare observed and simulated 2D-SFSs present in the same folder
 - visualize 1D-SFSs and compare observed and simulated 1D-SFSs present in the same folder
 SFS must be in the correct format (see above) and it currenlty supports only SFS files with a single SFS stored.
+
+### fold1DSFS.R & fold2DSFS.R
+
+These scripts fold unfolded 1D or 2D SFS. Currently supports only SFS files with a single SFS stored.
