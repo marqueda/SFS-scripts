@@ -2,9 +2,11 @@
 
 A collection of tools useful for preparing or manipulating site-frequency spectrum (SFS) files in the format as used by fastsimcoal2 (see http://cmpg.unibe.ch/software/fastsimcoal2/).
 
-### choosekgenotypes.py
+### sampleKgenotypesPerPop.py and choosekgenotypes.py
 
-This script is useful for the preparation of SFS files from genotypes in a VCF file, for which no missing data is allowed. It randomly draws k non-missing genotypes per population from a VCF file. Sites with < k non-missing genotypes per population are discarded. The individual names in the VCF file header need to contain the population code such as "individual.popcode[.more]" separated by a period from the individual name.
+These scripts are useful for the preparation of SFS files from genotypes in a VCF file, for which no missing data is allowed. They randomly draw k non-missing genotypes per population from a VCF file. Sites with < k non-missing genotypes per population are discarded.
+sampleKgenotypesPerPop.py: Uses a population file with format <IndividualTABPopulation> and allows to specify different k's for different popoulations.
+choosekgenotypes.py: Assumes that the individual names in the VCF file header contain the population code in the format "individual.popcode[.more]" separated by a period from the individual name.
 
 ### SFStools.R
 
