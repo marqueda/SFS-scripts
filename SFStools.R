@@ -249,7 +249,7 @@ if(opt$tool %in% c("mto2D","mto1D")){
     for(fold in sfstype){
       
       # Step 3.5: Print visualization to PDF for each SFS-type (minor / derived)
-      pdf(paste(opt$infile,"_1Dmarginal",fold,"AFs.pdf",sep=""),height=4,width=4,useDingbats=F,pointsize=10)
+      pdf(paste(opt$infile,"_1Dmarginal",fold,"AFs.pdf",sep=""),height=5,width=4,useDingbats=F,pointsize=10)
       par(mfrow=c(1,1),mar=c(0,4,0,1),oma=c(2.5,0,1,0))
       obslist=list()
       type=NULL;pops=NULL;n=1
@@ -312,17 +312,27 @@ if(opt$tool %in% c("mto2D","mto1D")){
           obslist[[n-1]]=sim
           
           # Plot difference betewen observed and expected SFS
-          par(fig=c(0,1,0,0.3))
-          dif=obs-sim
+          par(fig=c(0,1,0,0.18))
+          dif=sim/obs
+          dif[is.na(dif)]=1
+          dif[is.infinite(dif)]=1
+          max(abs(dif))
+          b=barplot((c(dif)-1)*100,names.arg = NA,col="grey",border=0,space = 0,
+                    ylim=c(min(dif)-1,max(dif)-1)*100,ylab="",yaxt="n");box()
+          axis(1,0:(length(dif)-1),at=b)
+          axis(2)
+          abline(h=0);mtext("% SNPs",2,line=3)
+          
+          par(fig=c(0,1,0.2,0.38),new=T)
+          dif=sim-obs
           max(abs(dif))
           b=barplot(c(dif),names.arg = NA,col="grey",border=0,space = 0,
                   ylim=c(min(dif),max(dif)),ylab="");box()
-          axis(1,0:(length(dif)-1),at=b)
-          abline(h=0);mtext("No. of SNPs",2,at=grconvertY(0.5,"ndc","user"),line=3)
+          abline(h=0);mtext("No. of SNPs",2,at=grconvertY(0.6,"ndc","user"),line=3)
           xlimit=par("usr")[1:2]
-        
+
           # Plot both observed and expected SFS
-          par(fig=c(0,1,0.3,1),new=T)
+          par(fig=c(0,1,0.4,1),new=T)
           plot(range(b),c(0,max(c(obs,sim))),type="n",xlim=xlimit,xaxs="i",ylab="",xlab="",axes=F)
           lines(c(0,rep(b,each=2)+c(-0.5,0.5),max(b)+0.5),c(0,rep(obs,each=2),0),lwd=1,col="grey")
           lines(c(0,rep(b,each=2)+c(-0.5,0.5),max(b)+0.5),c(0,rep(sim,each=2),0),lwd=1,lty=2,col="blue")
@@ -403,9 +413,9 @@ if(opt$tool %in% c("mto2D","mto1D")){
     for(fold in sfstype){
       
       # Step 4.5: Print PDF
-      pdf(paste(opt$infile,"_2D",fold,"AFs.pdf",sep=""),height=7,width=3,useDingbats=F,pointsize=10)
+      pdf(paste(opt$infile,"_2D",fold,"AFs.pdf",sep=""),height=5.3,width=6,useDingbats=F,pointsize=10)
       {
-        par(mfrow=c(3,1),oma=c(3,5,0,6),mar=c(2,0,3,0))
+        par(mfrow=c(2,2),oma=c(1,1,0.5,1.5),mar=c(2.5,2.5,2.5,4),mgp=c(1.5,0.5,0))
         
         # Step 4.5: Loop over populations
         for(j in pop){
@@ -463,7 +473,14 @@ if(opt$tool %in% c("mto2D","mto1D")){
                   xlab="",ylab="",main="observed SFS",xpd=NA);box()
             axis(2);axis(1)
           }else{plot(0,0,type="n",xlab="",ylab="",axes=F)}
+          mtext(paste("population",unlist(strsplit(j,"[_]"))[2]),2,at=grconvertY(0.5,"ndc","user"),line=2)
           
+          # Print expected SFS
+          if(is.matrix(sim)){
+            image(0:(dim(sim)[1]-1),0:(dim(sim)[2]-1),sim,col=rev(ramp99),zlim=0.5,breaks=br,axes=F,
+                xlab="",ylab="",main="expected SFS"); box()
+            axis(2);axis(1)
+          }else{plot(0,0,type="n",xlab="",ylab="",axes=F)}
           # Print color code legend
           logax=c(1,2,5)*rep(10^(seq(0,floor(uplog))),each=3);
           logax=c(0.5,logax[logax<10^(uplog)],round(10^(uplog),0))
@@ -476,19 +493,11 @@ if(opt$tool %in% c("mto2D","mto1D")){
                       par('usr')[2]+1.5*diff(grconvertX(0:1, 'inches', 'user'))*par('cin')[2]*par('cex')*par('lheight'),
                       grconvertY(1,"npc","user"),xpd=NA)
           mtext(expression(N[loci]),3,at=par('usr')[2]+
-                  0.5*diff(grconvertX(0:1,'inches','user'))*par('cin')[2]*par('cex')*par('lheight'),adj=0)
-          
-          # Print expected SFS
-          if(is.matrix(sim)){
-            image(0:(dim(sim)[1]-1),0:(dim(sim)[2]-1),sim,col=rev(ramp99),zlim=0.5,breaks=br,axes=F,
-                xlab="",ylab="",main="expected SFS"); box()
-            axis(2);axis(1)
-          }else{plot(0,0,type="n",xlab="",ylab="",axes=F)}
-          mtext(paste("population",unlist(strsplit(j,"[_]"))[2]),2,line=3)
-          
+                  0.5*diff(grconvertX(0:1,'inches','user'))*par('cin')[2]*par('cex')*par('lheight'),adj=0,line=0.5)
+
           # Print difference between observed and expected
           if(is.matrix(sim) & is.matrix(obs)){
-            dif=obs-sim
+            dif=sim-obs
             # difcols=colorRampPalette(c(brewer.pal(10,"RdBu")[1:5],"#FFFFFF",brewer.pal(10,"RdBu")[6:10]))
             difcols99=c("#67001F","#6E0220","#760421","#7D0722","#850923","#8D0C25","#940E26","#9C1127","#A41328","#AB162A","#B2192B","#B6202F","#BA2832","#BD2F36","#C13639","#C53E3D","#C84540","#CC4C43","#D05447","#D35B4A","#D7624F","#DA6954","#DD7059","#E0775F","#E37E64","#E6866A","#E98D6F","#EC9475","#EF9B7A","#F2A27F","#F4A886","#F5AD8D","#F6B394","#F7B89B","#F8BEA2","#F9C3A9","#FAC9B0","#FACEB7","#FBD4BE","#FCD9C5","#FDDDCB","#FDE1D1","#FDE5D6","#FDE8DC","#FDECE2","#FEF0E8","#FEF3ED","#FEF7F3","#FEFBF9","#FFFEFE","#FAFCFD","#F5F9FB","#F0F7FA","#ECF4F8","#E7F1F7","#E2EFF5","#DEECF4","#D9E9F2","#D4E7F1","#CFE4EF","#C9E1ED","#C2DDEB","#BCDAEA","#B6D7E8","#AFD4E6","#A9D0E4","#A2CDE2","#9CCAE0","#95C6DF","#8EC2DC","#86BDDA","#7EB8D7","#76B3D4","#6EAED1","#66A9CF","#5EA4CC","#569FC9","#4E9AC6","#4695C4","#4090C1","#3D8BBF","#3987BC","#3682BA","#337DB8","#2F79B5","#2C74B3","#2870B1","#256BAE","#2166AC","#1E61A5","#1B5C9E","#195696","#16518E","#134B87","#10467F","#0D4077","#0A3B70","#073568","#053061")
             difcols30=c("#67001F","#800823","#9A1027","#B31A2C","#BF3337","#CC4C43","#D86450","#E27C62","#EC9475","#F4AA89","#F8BDA0","#FBCFB8","#FDDFCE","#FDECE2","#FEF8F5","#F7FAFC","#E7F1F7","#D7E8F2","#C3DEEC","#AED3E6","#98C8DF","#7EB8D7","#63A7CE","#4896C4","#3986BC","#2D77B4","#2267AC","#185594","#0E427A","#053061")
@@ -498,7 +507,7 @@ if(opt$tool %in% c("mto2D","mto1D")){
             brd=c(-rev(brd),brd)
             image(0:(dim(dif)[1]-1),0:(dim(dif)[2]-1),dif,col=difcols99,
                   zlim=c(-1,1)*max(abs(dif)),breaks=brd,axes=F,
-                  xlab="",ylab="",main="observed - expected SFS",xpd=NA)
+                  xlab="",ylab="",main="expected - observed SFS",xpd=NA)
             axis(1);axis(2);box()
 
             logax=c(1,3)*rep(10^(seq(0,floor(uplogd))),each=2)
@@ -511,9 +520,36 @@ if(opt$tool %in% c("mto2D","mto1D")){
                         par('usr')[2]+1.5*diff(grconvertX(0:1, 'inches', 'user'))*par('cin')[2]*par('cex')*par('lheight'),
                         grconvertY(1,"npc","user"),xpd=NA)
             mtext(expression(N[loci]),3,at=par('usr')[2]+
-                    0.5*diff(grconvertX(0:1,'inches','user'))*par('cin')[2]*par('cex')*par('lheight'),adj=0)
+                    0.5*diff(grconvertX(0:1,'inches','user'))*par('cin')[2]*par('cex')*par('lheight'),adj=0,line=0.5)
+            
+            # Relative: Percentage
+            dif=sim/obs
+            # difcols=colorRampPalette(c(brewer.pal(10,"RdBu")[1:5],"#FFFFFF",brewer.pal(10,"RdBu")[6:10]))
+            difcols99=c("#67001F","#6E0220","#760421","#7D0722","#850923","#8D0C25","#940E26","#9C1127","#A41328","#AB162A","#B2192B","#B6202F","#BA2832","#BD2F36","#C13639","#C53E3D","#C84540","#CC4C43","#D05447","#D35B4A","#D7624F","#DA6954","#DD7059","#E0775F","#E37E64","#E6866A","#E98D6F","#EC9475","#EF9B7A","#F2A27F","#F4A886","#F5AD8D","#F6B394","#F7B89B","#F8BEA2","#F9C3A9","#FAC9B0","#FACEB7","#FBD4BE","#FCD9C5","#FDDDCB","#FDE1D1","#FDE5D6","#FDE8DC","#FDECE2","#FEF0E8","#FEF3ED","#FEF7F3","#FEFBF9","#FFFEFE","#FAFCFD","#F5F9FB","#F0F7FA","#ECF4F8","#E7F1F7","#E2EFF5","#DEECF4","#D9E9F2","#D4E7F1","#CFE4EF","#C9E1ED","#C2DDEB","#BCDAEA","#B6D7E8","#AFD4E6","#A9D0E4","#A2CDE2","#9CCAE0","#95C6DF","#8EC2DC","#86BDDA","#7EB8D7","#76B3D4","#6EAED1","#66A9CF","#5EA4CC","#569FC9","#4E9AC6","#4695C4","#4090C1","#3D8BBF","#3987BC","#3682BA","#337DB8","#2F79B5","#2C74B3","#2870B1","#256BAE","#2166AC","#1E61A5","#1B5C9E","#195696","#16518E","#134B87","#10467F","#0D4077","#0A3B70","#073568","#053061")
+            difcols30=c("#67001F","#800823","#9A1027","#B31A2C","#BF3337","#CC4C43","#D86450","#E27C62","#EC9475","#F4AA89","#F8BDA0","#FBCFB8","#FDDFCE","#FDECE2","#FEF8F5","#F7FAFC","#E7F1F7","#D7E8F2","#C3DEEC","#AED3E6","#98C8DF","#7EB8D7","#63A7CE","#4896C4","#3986BC","#2D77B4","#2267AC","#185594","#0E427A","#053061")
+            
+            up=max(c(dif)[!is.infinite(c(dif))],na.rm = T)
+            lo=min(c(dif)[!is.infinite(c(dif))],na.rm = T)
+            brd=c(seq(lo,1,length.out=50),seq(1,up,length.out=50))
+            image(0:(dim(dif)[1]-1),0:(dim(dif)[2]-1),dif,col=difcols99,
+                  zlim=c(-1,1)*max(abs(dif)),breaks=brd,axes=F,
+                  xlab="",ylab="",main="expected / observed SFS",xpd=NA)
+            axis(1);axis(2);box()
+            
+            ax=c(ceiling(seq(lo*10,10,length.out=3))[-3]/10,1,floor(seq(10,up*10,length.out=3))[-1]/10)
+            axis(4,at=grconvertY(0,"npc","user")+diff(grconvertY(0:1,"npc","user"))*
+                   seq(0,1,length.out=5),
+                 ax*100,las=2,line=1.4)
+            rasterImage(as.raster(matrix(rev(difcols30), ncol=1)),
+                        par('usr')[2]+0.5*diff(grconvertX(0:1, 'inches', 'user'))*par('cin')[2]*par('cex')*par('lheight'),
+                        grconvertY(0,"npc","user"),
+                        par('usr')[2]+1.5*diff(grconvertX(0:1, 'inches', 'user'))*par('cin')[2]*par('cex')*par('lheight'),
+                        grconvertY(1,"npc","user"),xpd=NA)
+            mtext("%",3,at=par('usr')[2]+
+                    0.5*diff(grconvertX(0:1,'inches','user'))*par('cin')[2]*par('cex')*par('lheight'),adj=0,line=0.5)
           }else{plot(0,0,type="n",xlab="",ylab="",axes=F)}
-          mtext(paste("population",unlist(strsplit(j,"[_]"))[1]),1,at=grconvertX(0.5,"ndc","user"),line=3)
+          
+          mtext(paste("population",unlist(strsplit(j,"[_]"))[1]),1,at=grconvertX(0.5,"ndc","user"),line=2)
         }
       }
       dev.off()
