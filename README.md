@@ -10,6 +10,11 @@ sampleKgenotypesPerPop.py: Uses a population file with format IndividualTABPopul
 
 choosekgenotypes.py: Assumes that the individual names in the VCF file header contain the population code in the format "individual.popcode[.more]" separated by a period from the individual name.
 
+### vcf2sfs.py
+
+This script converts VCF files into site frequency spectra (SFS) files of the respective dimensions in fastsimcoal2 format (1D, 2D or multi-D, depending on the number of populations in the VCF file) by simply counting alleles from genotypes for sites without missing data. It can also compute SFS for non-overlapping windows in the genome (defined by distance along the chromsome or number of sequenced sites in the VCF file), compute bootstrap replicates of the SFS (by resampling single sites) or block-bootstrap repliates of the SFS (by resampling non-overlapping windows in the genome).
+IMPORTANT: Sites with missing data are discarded. Use the script choosekgenotypes.py (see above) first to subsample genotypes per population to get rid of missing data.
+
 ### SFStools.R
 
 This script can:
