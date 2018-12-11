@@ -20,6 +20,13 @@
 #                 (also resulting in a BED file with block coordinates)
 #             Both versions create a folder bootSFS or blockbootSFS with subfolders rep1,...,repN
 #             containing the bootstrapped SFS
+# 2018-12-11: Fixed several bugs in the -w option:
+#             - if run with 'bp', site counting starts at site 0
+#             - the output BED file now correctly displays start/end position corresponding
+#               to fixed-size windows ('bp') or windows for sequenced sites ('sites')
+#             Added new functionality: -f to read an input BED file with window definitions
+#             WARNING: Windows in the BED file need to be sorted by chromosome / position as in the VCF file
+#                      Windows in the BED file cannot be overlapping (=no sliding windows)!
 
 # Load Python modules
 from sys import *
@@ -37,16 +44,17 @@ signal(SIGPIPE,SIG_DFL)
 parser = argparse.ArgumentParser(description='Converts a VCF file to an SFS file in fastsimcoal2 format by counting alleles from genotypes for sites without missing data')
 parser.add_argument('-i', '--input', dest='i', help="Input file in VCF format or enter '-' for STDIN [required]", required=True)
 parser.add_argument('-o', '--output', dest='o', help="Prefix for SFS filename or enter '-' for STDOUT [required]", required=True)
-parser.add_argument('-p', '--popfile', dest='p', help="Population file name [required], format: file with two TAB-separated columns, individual\tpopulation, for each individual in the VCF file (in the same order), one per line", required=True)
-parser.add_argument('-q', '--poporder', dest='q', help="Desired order of populations for the SFS outfile [optional, default: alphabetic order], format: pop3,pop1,pop2", required=False,default="XX")
-parser.add_argument('-w', '--windowSFS', dest='w', help="Compute SFS in non-overlapping windows [optional, default: off], format: [chr/nochr],[sites/bp],size \n [chr/nochr] : indicate whether the windows should respect chromosome boundaries (=chr) or not (=nochr)\n [sites/bp] : give 'sites' or 'bp' to indicate whether the window size is specified in no. of sites in the VCF file or no. of base pairs along a chromosome. Also outputs a BED file with window coordinates.", required=False,default="XX")
-parser.add_argument('-b', '--bootstrapSFS', dest='b', help="Compute N bootstrap replicates of the observed SFS or block-bootstrap replicates with blocks specified with the Option -w [optional, default: off], format: N = number of replicates. Option incompatible with output to STDOUT (-o -)", required=False, default=0)
+parser.add_argument('-p', '--popfile', dest='p', help="Population file name [required]. Format: file with two TAB-separated columns, individual\tpopulation, for each individual in the VCF file (in the same order), one per line", required=True)
+parser.add_argument('-q', '--poporder', dest='q', help="Desired order of populations for the SFS outfile [optional, default: alphabetic order]. Format: pop3,pop1,pop2", required=False,default="XX")
+parser.add_argument('-w', '--windowSFS', dest='w', help="Compute SFS in non-overlapping windows [optional, default: off]. Format: [chr/nochr],[sites/bp],size [chr/nochr]: indicate whether the windows should respect chromosome boundaries (=chr) or not (=nochr) [sites/bp]: give 'sites' or 'bp' to indicate whether the window size is specified in no. of sites in the VCF file or no. of base pairs along a chromosome. Also outputs a BED file with window coordinates.", required=False,default="XX")
+parser.add_argument('-f', '--windowSFSBED', dest='f', help="Compute SFS in non-overlapping windows specificed in a BED file [optional, default: off]. Format: <BED file name>. WARNING: windows need to be non-overlapping and sorted by chromosome / position (same order as VCF file).", required=False,default="XX")
+parser.add_argument('-b', '--bootstrapSFS', dest='b', help="Compute N bootstrap replicates of the observed SFS or block-bootstrap replicates with blocks specified with the Option -w [optional, default: off]. Format: N = number of replicates. Option incompatible with output to STDOUT (-o -)", required=False, default=0)
 parser.add_argument('-v', '--verbose', action='store_true', help="If -v is specified, reporting on progress, number of processed and filtered sites will be displayed", required=False, default=False)
-parser.add_argument('-r', '--reportafterNbasepairs', dest='r', help="Report", required=False,default=1000000)
+parser.add_argument('-r', '--reportafterNbp', dest='r', help="Reporting on progress after N basepairs. [optional, default: N = 1 Mbp]", required=False,default=1000000)
 args = parser.parse_args()
 
 # Check whether incompatible options are given and if, then abort.
-if (args.b != "XX") and (args.o == "-"):
+if (args.b > 0) and (args.o == "-"):
 	exit("ERROR: Bootstrap (-b) and output to STDOUT (-o -) are incompatible. Please specify an output file prefix with -o")
 
 # Parse -w option for window-SFS if given
@@ -55,6 +63,21 @@ if args.w != "XX":
 	winmet=args.w.split(',')[1]
 	winsiz=int(args.w.split(',')[2])
 	coord=[]
+
+# Parse -f option for window-SFS specified in BED file if given
+if args.f != "XX":
+	winbed=open(args.f,'r')
+	wfi=0
+	wfc=list()
+	wfs=list()
+	wfe=list()
+	for Line in winbed:
+		if not (re.match('^track',Line) or re.match('^browser',Line)):
+			entry=Line.strip("\n").split("\t")
+			wfc.append(entry[0])
+			wfs.append(entry[1])
+			wfe.append(entry[2])
+	winbed.close()
 
 # Parse -b option, number of bootstrap replicates, if given
 if args.b > 0:
@@ -110,8 +133,10 @@ else:
 # Count passing / failing sites and progress report intervals for reporting in screen (STDERR)
 sitefail=0
 sitepass=0
+winstart=0
 winsitecount=0
 winbpcount=0
+laststate='nowindow'
 lastchr=""
 reportcnt=1
 reportintv=int(args.r)
@@ -139,22 +164,72 @@ for Line in inputF:
 		# Initialize values for current and previous chromosme and position
 		if lastchr=="":
 			lastchr=columns[0]
-			winstart=int(columns[1])-1
 			winend=columns[1]
 		# Option Window-SFS: create new empty SFS after window boundary
 		if args.w != "XX":
+			if winmet=="sites":
+				winstart=int(columns[1])-1
+			winbpcount=int(columns[1])-winstart
+			winsitecount+=1
 			# Start new SFS and initialize variables at chromosome switch or window size exceeds limit
 			if (winchr=="chr" and (lastchr != columns[0])) or (winmet=="sites" and (winsitecount > winsiz)) or (winmet=="bp" and (winbpcount > winsiz)):
 				addsfs()
-				coord.append(lastchr+"\t"+str(winstart)+"\t"+winend)
-				winstart=int(columns[1])-1
-				winend=columns[1]
-				winbpcount=0
-				winsitecount=0
+				winsitecount=1
+				if winmet=="sites":
+					coord.append(lastchr+"\t"+str(winstart)+"\t"+winend)
+					winstart=int(columns[1])-1
+				else:
+					coord.append(lastchr+"\t"+str(winstart)+"\t"+str(winstart+winsiz))
+					winstart=((int(columns[1])-1)/winsiz)*winsiz
+		# Option Window-SFS-File: define start and end of windows, create new empty SFS after window boundary
+		if args.f != "XX":
+			# Check whether the new current window exists
+			if (wfi<=(len(wfc)-1)):
+				# Check whether the current site falls into the current window in the BED file
+				if (columns[0]==wfc[wfi]) and (int(columns[1])>int(wfs[wfi])) and (int(columns[1])<=int(wfe[wfi])):
+					# Empty the SFS if the last site did not fall into a window
+					if laststate=='nowindow':
+						# Empty last SFS window
+						sfs[sfsidx]=np.zeros([x*2+1 for x in popcount],dtype='int')
+					# Define current site as falling into the current window
+					laststate='window'
+				else:
+					# If the previous site fell into the current window, switch to a new current window
+					if laststate=='window':
+						addsfs()
+						wfi+=1
+					else:
+						# Empty last SFS window
+						sfs[sfsidx]=np.zeros([x*2+1 for x in popcount],dtype='int')
+					# Check whether the new current window exists
+					if (wfi<=(len(wfc)-1)):
+						# Check whether current site preceeds or exceeds new current window
+						if (columns[0]==wfc[wfi]) and (int(columns[1])<=int(wfs[wfi])):
+							# If the current site preceeds the new current window, empty last SFS window
+							sfs[sfsidx]=np.zeros([x*2+1 for x in popcount],dtype='int')
+							laststate='nowindow'
+						elif (columns[0]==wfc[wfi]) and (int(columns[1])>int(wfs[wfi])) and (int(columns[1])<=int(wfe[wfi])):
+							# If the current site matches the new current window, set laststate to active window
+							laststate='window'
+						else:
+							# If the current site exceeds the new current window, switch to newer current window until
+							# (a) current site preceeds or matches newer current window or (b) no more windows exist
+							while (((columns[0]!=wfc[wfi]) or ((columns[0]==wfc[wfi]) and (int(columns[1])>int(wfe[wfi])))) and (wfi<=(len(wfc)-1))):
+								addsfs()
+								wfi+=1
+								# Check whether the new current window exists
+								if (wfi<=(len(wfc)-1)):
+									# Check whether the current sites falls into the new current window in the BED file
+									if (columns[0]==wfc[wfi]) and (int(columns[1])>int(wfs[wfi])) and (int(columns[1])<=int(wfe[wfi])):
+										laststate='window'
+									else:
+										laststate='nowindow'
+								else:
+									laststate='nowindow'
+					else:
+						laststate='nowindow'
 		# Sum distance (number of basepairs) and number of sites processed so far
 		winend=columns[1]
-		winbpcount=int(columns[1])-winstart
-		winsitecount+=1
 		genotypecolumns=columns[9:len(columns)]
 		tmp=[x.split(":") for x in genotypecolumns]
 		genotypes=[x[0] for x in tmp]
@@ -218,10 +293,28 @@ else:
 # Write window coordinate file (BED format) to disk, if applicable
 if args.w != "XX":
 	# Add entry of last window
-	coord.append(lastchr+"\t"+str(winstart)+"\t"+winend)
+	if winmet=="sites":
+		coord.append(lastchr+"\t"+str(winstart)+"\t"+winend)
+	else:
+		coord.append(lastchr+"\t"+str(winstart)+"\t"+str(winstart+winsiz))
 	coordF=open(args.o+suffix+".bed", 'w')
 	coordF.write("\n".join(coord)+"\n")
 	coordF.close()
+
+# Write additional empty SFS for -f option if no sites were found
+if args.f != "XX":
+	if laststate=='window':
+		addsfs()
+		wfi+=1
+	else:
+		# Empty last SFS window
+		sfs[sfsidx]=np.zeros([x*2+1 for x in popcount],dtype='int')
+	while (wfi<=(len(wfc)-1)):
+		addsfs()
+		wfi+=1
+	# Delete late SFS entry
+	del sfs[sfsidx]
+	sfsidx=sfsidx-1
 
 # Decide whether to write SFS into STDOUT or file
 if args.o =="-":
@@ -233,7 +326,7 @@ else:
 
 # Optional: Bootstrap SFS or block-bootstrap SFS (if -w is specified)
 if args.b > 0:
-	if args.w == "XX":
+	if (args.w == "XX") and (args.f == "XX"):
 		def boot_sfs(sfs,popcount,sfsidx): # SFS bootstrapping function
 			# Create SFS array for bootstrapped
 			bootSFS=[]
