@@ -547,7 +547,7 @@ if(opt$tool %in% c("mto2D","mto1D")){
                         grconvertY(1,"npc","user"),xpd=NA)
             mtext("%",3,at=par('usr')[2]+
                     0.5*diff(grconvertX(0:1,'inches','user'))*par('cin')[2]*par('cex')*par('lheight'),adj=0,line=0.5)
-          }else{plot(0,0,type="n",xlab="",ylab="",axes=F)}
+          }else{plot(0,0,type="n",xlab="",ylab="",axes=F);plot(0,0,type="n",xlab="",ylab="",axes=F)}
           
           mtext(paste("population",unlist(strsplit(j,"[_]"))[1]),1,at=grconvertX(0.5,"ndc","user"),line=2)
         }
